@@ -13,11 +13,11 @@ timerQueueBenchmark.cpp \
 -l Com \
 -lbenchmark \
 -pthread \
--o bench \
+-o bench_epics_timerqueue \
 $1
 
 sudo cpupower frequency-set --governor performance > /dev/null
 
-./bench
+./bench_epics_timerqueue
 
 sudo cpupower frequency-set --governor powersave > /dev/null
