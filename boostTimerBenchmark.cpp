@@ -22,6 +22,7 @@ public:
   std::vector<boost::asio::steady_timer> tv;
 
   void SetUp(const ::benchmark::State& state) {
+    std::cout << "SetUp()\n";
     t = std::thread([this]() { ctx.run(); });
     tv.reserve(state.range(0));
     for (int i = 0; i < state.range(0); i++) {
@@ -34,6 +35,7 @@ public:
   }
   
   void TearDown(const ::benchmark::State& state) {
+    std::cout << "TearDown()\n";
     wg.reset();
     t.join();
   }
@@ -54,5 +56,23 @@ BENCHMARK_REGISTER_F(withActiveTimers, createAndStartTimer)
   ->Args({30000,  30})  // start timer while 30,000 timers exist, new timer has smallest expiration time
   ->Args({0,     120})  // start timer while no other timers exist, new timer has largest expiration time
   ->Args({30000, 120}); // start timer while 30,000 timers exist, new timer has largest expiration time
+
+BENCHMARK_DEFINE_F(withActiveTimers, createAndStartTimerMultiThreaded)(benchmark::State& state) {
+  std::cout << "Thread started\n";
+//   for (auto _ : state) {
+//     auto tmr = boost::asio::steady_timer(ctx, std::chrono::seconds(state.range(1)));
+//     std::string msg = "handler2\n";
+//     tmr.async_wait([msg](const boost::system::error_code& ec) {
+//       handler(ec, msg);
+//     });
+//   }
+}
+BENCHMARK_REGISTER_F(withActiveTimers, createAndStartTimerMultiThreaded)
+  ->Args({0,      30}) // start timer while timer queue is empty, new timer has smallest expiration time
+  ->Args({30000,  30}) // start timer while timer queue has 30,000 entries, new timer has smallest expiration time
+  ->Args({0,     120}) // start timer while timer queue is empty, new timer has largest expiration time
+  ->Args({30000, 120}) // start timer while timer queue has 30,000 entries, new timer has largest expiration time
+  ->Threads(1)
+  ->Threads(100);
 
 BENCHMARK_MAIN();

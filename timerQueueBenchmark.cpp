@@ -26,75 +26,6 @@ private:
   epicsTimer &timer;
 };
 
-// class timerQueueFixture : public benchmark::Fixture {
-// public:
-//   epicsTimerQueueActive& tq = epicsTimerQueueActive::allocate(false);
-// };
-
-static epicsTimerQueueActive& createEpicsTimerQueueActive() {
-  static epicsTimerQueueActive& tq = epicsTimerQueueActive::allocate(false);
-  return tq;
-}
-
-// class myEpicsTimerQueueActive {
-//   epicsTimerQueueActive& tq = epicsTimerQueueActive::allocate(false);
-// public:
-//   myEpicsTimerQueueActive() {}
-//   ~myEpicsTimerQueueActive() { tq.release(); }
-//   epicsTimerQueueActive& get() { return tq; }
-// };
-// 
-class epicsTimerQueueActiveCntr {
-public:
-  static size_t refCnt;
-  static epicsTimerQueueActive& tq;
-  static bool valid;
-  static epicsTimerQueueActive& get() {
-    cerr << "get()";
-    if (!valid) {
-      cerr << " - invalid, allocating";
-      tq = epicsTimerQueueActive::allocate(false);
-      valid = true;
-    }
-    refCnt++;
-    cerr << " - new ref cnt is " << refCnt << "\n";
-    return tq;
-  }
-  static void release() {
-    cerr << "release()";
-    refCnt--;
-    cerr << " - new ref cnt is " << refCnt;
-    if (refCnt == 0 && valid) {
-      cerr << " - releasing";
-      tq.release();
-      valid = false;
-    }
-    cerr << "\n";
-  }
-};
-
-size_t epicsTimerQueueActiveCntr::refCnt = 0;
-epicsTimerQueueActive& epicsTimerQueueActiveCntr::tq = epicsTimerQueueActive::allocate(false);
-bool epicsTimerQueueActiveCntr::valid = true;
-
-
-// class epicsTimerQueueActiveFactory {
-// private:
-//   bool valid = true;
-//   epicsTimerQueueActive& tq = epicsTimerQueueActive::allocate(false);
-// public:
-//   static epicsTimerQueueActive& get() {
-//     if (!valid) {
-//       tq = epicsTimerQueueActive::allocate(false);
-//     }
-//     return tq;
-//   }
-//   static void release() {
-//     tq.release();
-//     valid = false;
-//   }
-// };
-
 static void withPassiveTimersCreateTimer(benchmark::State& state) {
   epicsTimerQueueActive& tq = epicsTimerQueueActive::allocate(false);
   {
@@ -163,8 +94,7 @@ BENCHMARK(withActiveTimersCreateAndStartTimer)
 
 
 static void withActiveTimersCreateAndStartTimerMultiThreaded(benchmark::State& state) {
-  epicsTimerQueueActive& tq = createEpicsTimerQueueActive(); // share timer queue between threads
-//   epicsTimerQueueActive& tq = epicsTimerQueueActiveCntr::get();
+  epicsTimerQueueActive& tq = epicsTimerQueueActive::allocate(false); // share timer queue between threads
   {
     vector<handler> hv;
     if (state.thread_index == 0) {
@@ -183,17 +113,7 @@ static void withActiveTimersCreateAndStartTimerMultiThreaded(benchmark::State& s
     }
   }
 
-//   static bool released = false;
-//   if (!released) {
-//     cerr << "RELEASING\n";
-//     tq.release();
-//   }
-//   if (state.thread_index == 0) {
-//     cerr << "RELEASING...";
-//     tq.release();
-//     cerr << "DONE\n";
-//   }
-//   epicsTimerQueueActiveCntr::release();
+  tq.release();
 }
 BENCHMARK(withActiveTimersCreateAndStartTimerMultiThreaded)
   ->Args({0,      30}) // start timer while timer queue is empty, new timer has smallest expiration time
