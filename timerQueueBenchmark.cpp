@@ -12,7 +12,7 @@ using namespace std;
 class handler : public epicsTimerNotify
 {
 public:
-  handler(const char* nameIn, epicsTimerQueueActive& queue) : name(nameIn), timer(queue.createTimer()) {}
+  handler(const char* nameIn, epicsTimerQueue& queue) : name(nameIn), timer(queue.createTimer()) {}
   ~handler() { timer.destroy(); }
   void start(double delay) { timer.start(*this, delay); }
   void cancel() { timer.cancel(); }
@@ -26,8 +26,16 @@ private:
   epicsTimer &timer;
 };
 
+class passiveNotify : public epicsTimerQueueNotify
+{
+public:
+  void reschedule() {};
+  double quantum() { return 0.0; };
+};
+
 static void withPassiveTimersCreateTimer(benchmark::State& state) {
-  epicsTimerQueueActive& tq = epicsTimerQueueActive::allocate(false);
+  passiveNotify n;
+  epicsTimerQueuePassive& tq = epicsTimerQueuePassive::create(n);
   {
     vector<handler> hv;
     hv.reserve(state.range(0));
@@ -40,7 +48,6 @@ static void withPassiveTimersCreateTimer(benchmark::State& state) {
       handler h = handler("arbitrary name", tq);
     }
   }
-  tq.release();
 }
 BENCHMARK(withPassiveTimersCreateTimer)->Arg(0)->Arg(30000);
 
