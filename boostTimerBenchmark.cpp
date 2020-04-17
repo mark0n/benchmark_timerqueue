@@ -19,25 +19,41 @@ public:
   boost::asio::io_context ctx;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type> wg = boost::asio::make_work_guard(ctx); // ensure ctx.run() doesn't run out of work before we're done
   std::thread t;
+  std::condition_variable cv;
+  std::mutex cv_mtx;
+  bool threadReady = false;
   std::vector<boost::asio::steady_timer> tv;
 
   void SetUp(const ::benchmark::State& state) {
-    std::cout << "SetUp()\n";
-    t = std::thread([this]() { ctx.run(); });
-    tv.reserve(state.range(0));
-    for (int i = 0; i < state.range(0); i++) {
-      tv.emplace_back(ctx, 60s);
-      std::string msg = "handler " + std::to_string(i) + "\n";
-      tv.back().async_wait([msg](const boost::system::error_code& ec) {
-        handler(ec, msg);
+    if (state.thread_index == 0) {
+      t = std::thread([this]() {
+        {
+          std::lock_guard<std::mutex> lck(cv_mtx);
+          threadReady = true;
+          cv.notify_all();
+        }
+        ctx.run();
       });
+      tv.reserve(state.range(0));
+      for (int i = 0; i < state.range(0); i++) {
+        tv.emplace_back(ctx, 60s);
+        std::string msg = "handler " + std::to_string(i) + "\n";
+        tv.back().async_wait([msg](const boost::system::error_code& ec) {
+          handler(ec, msg);
+        });
+      }
+      {
+        std::unique_lock<std::mutex> lck(cv_mtx);
+        cv.wait(lck, [this]{ return threadReady; });
+      }
     }
   }
   
   void TearDown(const ::benchmark::State& state) {
-    std::cout << "TearDown()\n";
     wg.reset();
-    t.join();
+    if (state.thread_index == 0) {
+      t.join();
+    }
   }
 };
 
@@ -58,14 +74,13 @@ BENCHMARK_REGISTER_F(withActiveTimers, createAndStartTimer)
   ->Args({30000, 120}); // start timer while 30,000 timers exist, new timer has largest expiration time
 
 BENCHMARK_DEFINE_F(withActiveTimers, createAndStartTimerMultiThreaded)(benchmark::State& state) {
-  std::cout << "Thread started\n";
-//   for (auto _ : state) {
-//     auto tmr = boost::asio::steady_timer(ctx, std::chrono::seconds(state.range(1)));
-//     std::string msg = "handler2\n";
-//     tmr.async_wait([msg](const boost::system::error_code& ec) {
-//       handler(ec, msg);
-//     });
-//   }
+  for (auto _ : state) {
+    auto tmr = boost::asio::steady_timer(ctx, std::chrono::seconds(state.range(1)));
+    std::string msg = "handler2\n";
+    tmr.async_wait([msg](const boost::system::error_code& ec) {
+      handler(ec, msg);
+    });
+  }
 }
 BENCHMARK_REGISTER_F(withActiveTimers, createAndStartTimerMultiThreaded)
   ->Args({0,      30}) // start timer while timer queue is empty, new timer has smallest expiration time
