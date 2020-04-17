@@ -90,4 +90,23 @@ BENCHMARK_REGISTER_F(withActiveTimers, createAndStartTimerMultiThreaded)
   ->Threads(1)
   ->Threads(100);
 
+BENCHMARK_DEFINE_F(withActiveTimers, cancelTimer)(benchmark::State& state) {
+  for (auto _ : state) {
+    state.PauseTiming();
+    auto tmr = boost::asio::steady_timer(ctx, std::chrono::seconds(state.range(1)));
+    std::string msg = "handler2\n";
+    tmr.async_wait([msg](const boost::system::error_code& ec) {
+      handler(ec, msg);
+    });
+    state.ResumeTiming();
+    tmr.cancel();
+  }
+}
+BENCHMARK_REGISTER_F(withActiveTimers, cancelTimer)
+  ->Args({0,      30}) // start/cancel timer while timer queue is empty, new timer has smallest expiration time
+  ->Args({30000,  30}) // start/cancel timer while timer queue has 30,000 entries, new timer has smallest expiration time
+  ->Args({0,     120}) // start/cancel timer while timer queue is empty, new timer has largest expiration time
+  ->Args({30000, 120}) // start/cancel timer while timer queue has 30,000 entries, new timer has largest expiration time
+  ->Threads(1)
+  ->Threads(100);
 BENCHMARK_MAIN();
